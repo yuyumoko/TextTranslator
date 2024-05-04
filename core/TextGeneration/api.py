@@ -239,7 +239,7 @@ class QueueTextGenerationAPI:
         await server.api.close_session()
         self.servers.remove(server)
         logger.warn(f"[{text}] put back to queue.")
-        self.queue.put((make_content, text))
+        self.queue.put((make_content, text, gpt_prompt_list, is_strictest))
         await self.wait_server_reconnect(server.config)
 
     async def wait_server_reconnect(self, openai_config: OpenAiServer):
