@@ -25,6 +25,15 @@ def find_unity_game_data_path(game_path: Path):
     )[0]
     return game_exe.with_name(game_exe.stem + "_Data")
 
+def japanese_normalize(text):
+    text = text.replace('〜', 'ー').replace('～', 'ー')
+    text = text.replace("’", "'").replace('”', '"').replace('“', '"')
+    text = text.replace('―', '-').replace('‐','-').replace('˗','-').replace('֊', '-')
+    text = text.replace('‐', '-').replace('‑','-').replace('‒','-').replace('–', '-')
+    text = text.replace('⁃', '-').replace('⁻','-').replace('₋', '-').replace('−', '-')
+    text = text.replace('﹣', 'ー').replace('－','ー').replace('—','ー').replace('―', 'ー')
+    text = text.replace('━', 'ー').replace('─', 'ー')
+    return unicodedata.normalize("NFKC", text)
 
 def has_japanese(text):
     text = unicodedata.normalize("NFKC", text)

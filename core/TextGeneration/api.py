@@ -12,7 +12,7 @@ from collections import namedtuple
 from .typing import ChatCompletionRequest, CurrentModelInfo
 from utils.session import HTTPMethod, HTTPSessionApi
 
-from utils import logger, read_yaml, str2md5, has_japanese
+from utils import logger, read_yaml, str2md5, has_japanese, japanese_normalize
 
 T = TypeVar("T")
 
@@ -187,7 +187,7 @@ class QueueTextGenerationAPI:
                     continue
 
                 payload = {
-                    "prompt": make_content(text, gpt_prompt_list),
+                    "prompt": make_content(japanese_normalize(text), gpt_prompt_list),
                     "max_tokens": 512,
                     "temperature": 0.1,
                     "top_p": 0.3,

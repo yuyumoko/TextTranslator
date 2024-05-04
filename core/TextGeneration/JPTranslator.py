@@ -201,9 +201,7 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
                         "\n".join(current_line),
                         target_out_file,
                     )
-                    tran_cache[text_list_hash_data[current_line_hash]] = "\n".join(
-                        current_line
-                    )
+                    tran_cache[text_list_hash_data[current_line_hash]] = "\n".join(current_line)
                     current_line = []
                     continue
                 if not is_strictest:
