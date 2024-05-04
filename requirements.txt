@@ -1,0 +1,10 @@
+pydantic
+colorlog
+tenacity
+dumb-menu
+ujson
+ruamel.yaml
+tqdm
+pythonnet
+aiohttp
+UnityPy
