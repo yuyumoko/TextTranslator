@@ -204,6 +204,7 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
                     tran_cache[text_list_hash_data[current_line_hash]] = "\n".join(current_line)
                     current_line = []
                     continue
+                
                 if not is_strictest:
                     current_line.append(self.result_data.get(str2md5(line), line))
                 else:

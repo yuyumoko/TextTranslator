@@ -133,6 +133,7 @@ async def run_translate_json_async(json_path: Path):
             json.dump(pending_data, f, ensure_ascii=False, indent=4)
 
     tg = await connect_openai_servers()
+    tg.cache_path = tran_cache.parent
     text_list = tg.read_prepare_text(pending_file)
 
     await tg.translate(text_list, target_out_file=pending_file, tran_cache_file=tran_cache)
