@@ -205,6 +205,9 @@ class QueueTextGenerationAPI:
                         if res_text.endswith(end):
                             res_text = res_text.rstrip(end)
                             break
+                        
+                if not text.endswith("。") and res_text.endswith("。"):
+                    res_text = res_text.rstrip("。")
 
                 with self.result_lock:
                     if len(res_text) > 500:
