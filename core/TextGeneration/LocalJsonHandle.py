@@ -15,6 +15,8 @@ def read_json(file_path: Path):
 
 class LocalJsonHandle:
     prepare_data = None
+    out_json_name = "prepare_text.json"
+    out_json_path = None
 
     def set_cache_path(self, cache_path: Path):
         if cache_path.suffix == ".exe":
@@ -22,19 +24,20 @@ class LocalJsonHandle:
         else:
             self.cache_path = cache_path
         
-        prepare_text_path = self.cache_path / "prepare_text.json"
+        prepare_text_path = self.cache_path / self.out_json_name
         if not prepare_text_path.exists():
-            prepare_text_path = self.cache_path / "Cache" / "prepare_text.json"
+            prepare_text_path = self.cache_path / "Cache" / self.out_json_name
             if not prepare_text_path.exists():
                 raise FileNotFoundError(
-                    "prepare_text.json not exists, please generate it first."
+                    f"{prepare_text_path} not exists, please generate it first."
                 )
-
+                
+        self.out_json_path = prepare_text_path
         self.cache_path = prepare_text_path.parent
 
     def load_prepare_text(self, target_file: Path = None):
         if target_file is None:
-            target_file = self.cache_path / "prepare_text.json"
+            target_file = self.cache_path / self.out_json_name
         
         return read_json(target_file)
 
@@ -47,7 +50,7 @@ class LocalJsonHandle:
 
     def save_prepare_text(self, data: dict, target_file: Path = None):
         if target_file is None:
-            target_file = self.cache_path / "prepare_text.json"
+            target_file = self.cache_path / self.out_json_name
         
         with open(target_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=4)

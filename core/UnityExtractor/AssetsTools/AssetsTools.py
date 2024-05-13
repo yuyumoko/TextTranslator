@@ -164,9 +164,7 @@ class AssetsTools:
     def add_assets_cache(
         self, file_inst, asset_name: str, file_path: str, file_name_fix=""
     ):
-        self.assets[asset_name] = Assets(
-            file_inst, asset_name, file_path, file_name_fix
-        )
+        self.assets[asset_name] = Assets(file_inst, asset_name, file_path, file_name_fix)
 
     def load_asset(self, asset_path: str, stream=None):
         if stream is None:
@@ -177,15 +175,17 @@ class AssetsTools:
         afile.GenerateQuickLookup()
         self.manager.LoadClassDatabaseFromPackage(afile.Metadata.UnityVersion)
         self.add_assets_cache(afileInst, afileInst.name, asset_path)
+        return afileInst
 
     def load_asset_bundle(self, bundle_path: str, stream=None):
+        if stream is None:
+            stream = File.OpenRead(str(bundle_path))
+            
         bunInst = self.manager.LoadBundleFile(stream, bundle_path, True)
         file_name_fix = ""
         if Path(bunInst.path) != Path(bundle_path):
-            file_name_fix = "_"
-            bunInst = self.manager.LoadBundleFile(
-                stream, bundle_path + file_name_fix, True
-            )
+            file_name_fix = "_name_fix"
+            bunInst = self.manager.LoadBundleFile(stream, bundle_path + file_name_fix, True)
 
         for cab_name in bunInst.file.GetAllFileNames():
             if cab_name.endswith(".resS") or cab_name.endswith(".resource"):
@@ -197,6 +197,7 @@ class AssetsTools:
             afile.GenerateQuickLookup()
             self.manager.LoadClassDatabaseFromPackage(afile.Metadata.UnityVersion)
             self.add_assets_cache(afileInst, cab_name, bundle_path, file_name_fix)
+        return bunInst
 
     def load_resources(self):
         if self.resource_is_loaded:
@@ -336,25 +337,18 @@ class AssetsTools:
         script_obj = {}
 
         def dump_script(asset: Assets, go_base):
-            debug_index = 0
+            
             for goInfo in go_base:
                 try:
                     goBase = self.manager.GetBaseField(asset.file_inst, goInfo)
                 except Exception as e:
-                    logger.error(
-                        f"base field error file:{asset.file_path} PathId:[{goInfo.PathId}] Source:{e.Source} Message:{e.Message}"
-                    )
+                    logger.error(f"field load:{asset.file_path} PathId:[{goInfo.PathId}] Source:{e.Source} Message:{e.Message}")
                     continue
-
-                debug_index += 1
 
                 type_name = goBase.TypeName
                 asset_name = self.AT.AssetHelper.GetAssetNameFast(
                     asset.file_inst.file, self.manager.ClassDatabase, goInfo
                 )
-
-                if asset_name == "New Table Collection_ja":
-                    asset_name
 
                 container_path = self.container.get(type_name)
                 if container_path is None:
@@ -447,22 +441,22 @@ class AssetsTools:
             bunInst = None
 
             if is_bundle:
-                bunInst = self.manager.LoadBundleFile(file_path, True)
+                # bunInst = self.manager.LoadBundleFile(file_path, True)
+                    bunInst = self.load_asset_bundle(file_path)
 
             data_list = data["cab"] if is_bundle else data["asset"]
 
             for cab_name, assets in data_list.items():
 
                 if is_bundle:
-                    afileInst = self.manager.LoadAssetsFileFromBundle(
-                        bunInst, cab_name, True
-                    )
+                    afileInst = self.manager.LoadAssetsFileFromBundle(bunInst, cab_name, True)
                 else:
-                    afileInst = self.manager.LoadAssetsFile(file_path, True)
+                    # afileInst = self.manager.LoadAssetsFile(file_path, True)
+                    afileInst = self.load_asset(file_path)
 
                 afile = afileInst.file
-                afile.GenerateQuickLookup()
-                self.manager.LoadClassDatabaseFromPackage(afile.Metadata.UnityVersion)
+                # afile.GenerateQuickLookup()
+                # self.manager.LoadClassDatabaseFromPackage(afile.Metadata.UnityVersion)
                 afileInstCache[file_path] = afileInst
 
                 with tqdm(total=len(assets), desc=f"update {cab_name}") as pbar:
@@ -471,6 +465,7 @@ class AssetsTools:
                     for _script_obj in assets:
                         pbar.update(1)
                         path_id = _script_obj["info"]["path_id"]
+                        
                         if path_cache.get(path_id) is not None:
                             goInfo, goBase = path_cache[path_id]
                         else:
@@ -489,9 +484,53 @@ class AssetsTools:
 
                         goBaseField = goBase
                         
+                        # if goBaseField.TypeName == "TextAsset" and path_id in json_value_path:
+                        #     continue
+                        
                         if goBaseField.TypeName == "TextAsset":
-                            if goBaseField["m_Script"].AsString != _script_obj["value"]:
-                                goBaseField["m_Script"].AsString = _script_obj["value"]
+                            
+                            
+                            def update_str_obj(str_obj, paths, field, value):
+                                replace_obj = json.loads(str_obj)
+                                replace_obj_obj = replace_obj
+                                
+                                for _path in paths:
+                                    if "[" in _path and _path.endswith("]"):
+                                        _path_arr = _path.split("[")
+                                        for _index, _field in enumerate(_path_arr):
+                                            if field == "" and _path_arr[-1].endswith("]") and _index == len(_path_arr) - 1:
+                                                field = int(_field.rstrip("]"))
+                                            elif _field.endswith("]"):
+                                                replace_obj_obj = replace_obj_obj[int(_field.rstrip("]"))]
+                                            elif _field == "value":
+                                                continue
+                                            else:
+                                                replace_obj_obj = replace_obj_obj.get(_field)
+                                    elif isinstance(replace_obj_obj.get(_path), dict):
+                                        replace_obj_obj = replace_obj_obj.get(_path)
+                                
+                                replace_obj_obj[field] = value
+                                replace_text = json.dumps(replace_obj, ensure_ascii=False)
+                                return replace_text
+                            
+                            
+                            str_obj = goBaseField["m_Script"].AsString
+                            full_path = _script_obj["full_path"].split(".")[1:]
+                            field = _script_obj['field']
+                            value = _script_obj['value']
+                            
+                            if isinstance(_script_obj["info"]["value"], list):
+                                replace_text = update_str_obj(str_obj, full_path, field, value)
+                                goBaseField["m_Script"].AsString = replace_text
+                                continue
+                            elif isinstance(_script_obj["info"]["value"], dict):
+                                replace_text = update_str_obj(str_obj, full_path, field, value)
+                                goBaseField["m_Script"].AsString = replace_text
+                                continue
+                            
+                            replace_text = _script_obj["value"]
+                            if goBaseField["m_Script"].AsString != replace_text:
+                                goBaseField["m_Script"].AsString = replace_text
                                 continue
 
                         _script_obj_full_path = _script_obj["full_path"].split(".")[2:]
@@ -500,9 +539,7 @@ class AssetsTools:
                             if "[" in _path and _path.endswith("]"):
                                 for _field in _path.split("["):
                                     if _field.endswith("]"):
-                                        goBaseField = goBaseField[
-                                            int(_field.rstrip("]"))
-                                        ]
+                                        goBaseField = goBaseField[int(_field.rstrip("]"))]
                                     else:
                                         goBaseField = goBaseField[_field + ".Array"]
                             else:
@@ -538,10 +575,19 @@ class AssetsTools:
 
     def save_assets(self, afileInst):
         is_bundle = bool(afileInst.parentBundle)
+        file_name_fix = ""
         if is_bundle:
+            if assets := self.assets.get(afileInst.name):
+                file_name_fix = assets.file_name_fix
+                
             afileInst = afileInst.parentBundle
+            
 
         temp_path = afileInst.path
+        
+        if file_name_fix:
+            temp_path = temp_path.replace(file_name_fix, "")
+        
         temp_mod_path = temp_path + ".mod"
         writer = self._AT.AssetsFileWriter(temp_mod_path)
         afileInst.file.Write(writer)
