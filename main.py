@@ -92,9 +92,14 @@ def run_write_unity_file(game_path: Path):
 
 @ag.apply("请拖入游戏目录")
 def run_replace_font(game_path: Path):
+    import dumb_menu
     from core.UnityExtractor.ReplaceFont import replace_unity_font
-
-    replace_unity_font(game_path, Path("./font/unifont-all.ttf"))
+    
+    fonts = [f for f in Path("./font").iterdir() if f.is_file() and f.suffix in [".ttf", ".otf"]]
+    options = [f"{i+1}. {f.name}" for i, f in enumerate(fonts)]
+    index = dumb_menu.get_menu_choice(options, True)
+    
+    replace_unity_font(game_path, fonts[index])
     
     # ./font/unifont-all.ttf
     # replace_unity_font(game_path, Path("./font/unifont-all.ttf"))
