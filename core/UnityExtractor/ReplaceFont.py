@@ -1,3 +1,4 @@
+import shutil
 import UnityPy
 
 from pathlib import Path
@@ -5,11 +6,11 @@ from tqdm import tqdm
 from UnityPy.classes import Font
 
 from utils import find_unity_game_data_path, logger
-from .AssetsTools.AssetsTools import get_all_assets_files
+from .AssetsTools.AssetsTools import get_all_files, AssetsTools, FileType
+
 
 from fontTools import subset
 from fontTools.ttLib import TTFont
-from fontTools.merge import Merger as MergeFont
 
 from core.TextGeneration.LocalJsonHandle import LocalJsonHandle
 # from .Font_OTF2TTF  import otf_to_ttf
@@ -20,33 +21,7 @@ DEFAULT_CHARSET += "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWX
 
 
 
-def replace_unity_font(game_path: Path, font_path: Path | list[Path]):
-    # if isinstance(font_path, list):
-    #     logger.info("merge font...")
-    #     fonts = []
-    #     for p in font_path:
-    #         if not p.exists():
-    #             raise FileNotFoundError(f"font file not found: {p}")
-    #         if p.suffix == ".otf":
-    #             new_ttf_path = p.with_suffix(".ttf")
-    #             if not new_ttf_path.exists():
-    #                 logger.info(f"convert otf to ttf: {p}")
-    #                 new_ttf = TTFont(p)
-    #                 otf_to_ttf(new_ttf)
-    #                 new_ttf.save(new_ttf_path)
-                    
-    #             fonts.append(new_ttf_path)
-    #         elif p.suffix == ".ttf":
-    #             fonts.append(p)
-    #         else:
-    #             raise ValueError(f"unsupported font file type: {p}")
-        
-    #     merge_font = MergeFont()
-    #     merge_font.merge(fonts)
-    #     merge_font.save(game_path / "merge_font.ttf")
-    #     font_path = game_path / "merge_font.ttf"
-    
-    
+def replace_unity_font(game_path: Path, font_path: Path):
     logger.info("make temp font...")
     localJsonHandle = LocalJsonHandle()
     localJsonHandle.set_cache_path(game_path)
@@ -71,9 +46,13 @@ def make_temp_font(src_font_path: Path, dist_font_path: Path, subset_chars: str)
 
 
 def write_unity_font(game_path: Path, font_path: Path):
+    AT = AssetsTools(find_unity_game_data_path(game_path))
+    
     font_data = list(font_path.read_bytes())
-
-    for assets_path in get_all_assets_files(find_unity_game_data_path(game_path)):
+    
+    asset_files = get_all_files(game_path, False)
+    
+    for file_type, stream, assets_path in tqdm(asset_files, desc="Loading assets"):
         env = UnityPy.load(assets_path)
         is_changed = False
 
@@ -104,6 +83,18 @@ def write_unity_font(game_path: Path, font_path: Path):
         if is_changed:
             logger.info(f"write file {assets_path}")
             data = env.file.save()
+            
             with open(assets_path, "wb") as f:
                 f.write(data)
+            
+            
+            if file_type == FileType.BundleFile:
+                assets_path = Path(assets_path)
+                temp_mod_path = assets_path.with_suffix(".mod")
+                assets_path.rename(temp_mod_path)
+                
+                AT.compresses_asset_bundle(str(temp_mod_path), output_path=str(assets_path))
+                
+                
+            
     logger.info("Done")

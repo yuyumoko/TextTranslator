@@ -74,13 +74,17 @@ EXCLUDE_SUFFIX = [
 from System.IO import File
 
 
-def get_all_files(directory: str | Path):
+def get_all_files(directory: str | Path, open_file=True):
     directory = directory if isinstance(directory, Path) else Path(directory)
+    if directory.is_file():
+        directory = directory.parent
+    
     for file in directory.rglob("*"):
         if file.is_file() and file.suffix not in EXCLUDE_SUFFIX:
-            file_type, reader = check_file_type(file.open("rb"))
+            with file.open("rb") as f:
+                file_type, reader = check_file_type(f)
             if file_type == FileType.AssetsFile or file_type == FileType.BundleFile:
-                yield file_type, File.OpenRead(str(file)), str(file.resolve())
+                yield file_type, File.OpenRead(str(file)) if open_file else None, str(file.resolve())
 
 
 def pythonnet_init(is_MonoCecil=False):
@@ -616,7 +620,11 @@ class AssetsTools:
         newUncompressedBundle.Close()
 
         Path(bundle_path).unlink()
-        Path(output_path).unlink()
+        
+        op = Path(output_path)
+        if op.exists():
+            op.unlink()
+            
         Path(output_path + ".compressed").rename(output_path)
 
         logger.info(f"compress file [{output_path}]")

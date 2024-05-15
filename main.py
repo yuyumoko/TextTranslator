@@ -12,7 +12,7 @@ from utils import logger, get_ecx_path, has_japanese
 from utils.arg_require import ArgRequire, ArgRequireOption
 
 
-__version__ = "0.6.7s"
+__version__ = "0.6.8"
 
 ag = ArgRequire(ArgRequireOption(save=True, save_path="config.ini"))
 
@@ -94,12 +94,10 @@ def run_write_unity_file(game_path: Path):
 def run_replace_font(game_path: Path):
     from core.UnityExtractor.ReplaceFont import replace_unity_font
 
-    # ./font/unifont-all.ttf
     replace_unity_font(game_path, Path("./font/unifont-all.ttf"))
-    # replace_unity_font(game_path, [
-    #     Path("./font/unifont-all.ttf"),
-    #     Path("./font/NotoSansSC-Regular.otf"),
-    # ])
+    
+    # ./font/unifont-all.ttf
+    # replace_unity_font(game_path, Path("./font/unifont-all.ttf"))
 
     # from core.UnityExtractor.TextFinder import TextFinder
 

@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 from utils import logger, find_unity_game_data_path, search_object_text, has_japanese
 
-from .AssetsTools.AssetsTools import AssetsTools, get_all_assets_files, get_all_files, FileType
+from .AssetsTools.AssetsTools import AssetsTools, get_all_files, FileType
 from .AssetsTools.AssetClassID import AssetClassID
 
 
