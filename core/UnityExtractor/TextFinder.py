@@ -3,6 +3,9 @@ import ujson as json
 
 from tqdm import tqdm
 
+from UnityPy.export.Texture2DConverter import parse_image_data, TF
+from UnityPy.enums.BuildTarget import BuildTarget
+
 from utils import logger, find_unity_game_data_path, search_object_text, has_japanese
 
 from .AssetsTools.AssetsTools import AssetsTools, get_all_files, FileType
@@ -94,45 +97,129 @@ class TextFinder:
         logger.info("done, prepare_text.json and text_data.json are generated")
 
     def replace_font(self, font_path: Path):
-        # 啊啊啊啊 怎么搞啊
+
         font_data = font_path.read_bytes()
 
-        asset_files = get_all_assets_files(self.game_data_dir)
+        asset_files = get_all_files(self.game_data_dir.parent)
         logger.info("Loading resources..")
         if self.at.load_resources() is False:
             logger.warn("resources not loaded, container is empty")
 
-        for file in tqdm(asset_files, desc="Loading assets"):
-            self.at.load_asset(file)
+        for file_type, stream, file in tqdm(asset_files, desc="Loading assets"):
+            if file_type == FileType.AssetsFile:
+                self.at.load_asset(file, stream)
+            elif file_type == FileType.BundleFile:
+                self.at.load_asset_bundle(file, stream)
 
         afileInstCache = {}
 
         with tqdm(total=len(self.at.assets)) as pbar:
-            for file_inst in self.at.assets.values():
-
+            for asset_info in self.at.assets.values():
+                file_inst = asset_info.file_inst
                 pbar.update()
-                FontBaseList = self.at.filter_type(file_inst, AssetClassID.Font)
-                for goInfo in FontBaseList:
-                    goBase = self.at.manager.GetBaseField(file_inst, goInfo)
-                    font_name = goBase["m_Name"].AsString
-                    pbar.set_description(f"Replacing font {font_name}")
 
-                    newBaseField = self.at.manager.CreateValueBaseField(
-                        file_inst, AssetClassID.Font.value
-                    )
-                    newBaseField["m_FontData"].AsByteArray = font_data
+                for goInfo in self.at.filter_type(
+                    file_inst, AssetClassID.MonoBehaviour
+                ):
 
-                    newBaseField["m_Name"].AsString = font_name
-                    newInfo = self.at._AT.AssetFileInfo.Create(
-                        file_inst.file, goInfo.PathId, AssetClassID.Font.value
-                    )
-                    newInfo.SetNewData(newBaseField)
+                    try:
+                        goBase = self.at.manager.GetBaseField(file_inst, goInfo)
+                    except Exception as e:
+                        logger.error(
+                            f"field load:{asset_info.file_path} PathId:[{goInfo.PathId}] Source:{e.Source} Message:{e.Message}"
+                        )
+                        continue
 
-                    file_inst.file.Metadata.RemoveAssetInfo(goInfo)
-                    file_inst.file.Metadata.AddAssetInfo(newInfo)
+                    # bytes(goBase.WriteToByteArray())
 
-                    if afileInstCache.get(file_inst.path) is None:
-                        afileInstCache[file_inst.path] = file_inst
+                    name = goBase["m_Name"].AsString
 
-        for afileInst in afileInstCache.values():
-            self.at.save_assets(afileInst)
+                    components = goBase["m_Component.Array"]
+
+                    if "SDF" in name:
+                        name
+                        # type_name = goBase.TypeName
+                        # asset_name = self.at.AT.AssetHelper.GetAssetNameFast(file_inst.file, self.at.manager.ClassDatabase, goInfo)
+                        
+                        
+                        scriptBaseField = self.at.manager.GetExtAsset(file_inst, goBase["m_Script"]).baseField
+                        class_name = scriptBaseField["m_Name"].AsString # ' '
+                        SDFBehaviour = self.at.dump_children(goBase)
+                        
+                        atlas_path_id = SDFBehaviour['atlas']['m_PathID']
+                        
+                        # material_path_id = SDFBehaviour['material']['m_PathID']
+                        # material_goInfo = file_inst.file.GetAssetInfo(material_path_id)
+                        # material_goBase = self.at.manager.GetBaseField(file_inst, material_goInfo)
+                        # material = self.at.dump_children(material_goBase)
+                        
+                        # atlas_path_id = material['m_SavedProperties']['m_TexEnvs'][0]['second']['m_Texture']['m_PathID']
+                        atlas_goInfo = file_inst.file.GetAssetInfo(atlas_path_id)
+                        atlas_goBase = self.at.manager.GetBaseField(file_inst, atlas_goInfo)
+                        
+                        texture = self.at.Texture.TextureFile.ReadTextureFile(atlas_goBase)
+                        # textureBgraRaw = texture.GetTextureData(file_inst)
+                        
+                        if texture.pictureData.Length == 0 and texture.m_StreamData.size != 0:
+                            fixedStreamPath = texture.m_StreamData.path
+                            
+                            bundle = file_inst.parentBundle.file
+                            reader = bundle.DataReader
+                            # resourceFileIndex = bundle.GetFileIndex(fixedStreamPath.split("/")[-1])
+                            # resourceFileOffset, resourceFileLength = bundle.GetFileRange(resourceFileIndex, resourceFileOffset, resourceFileLength)
+                            
+                            # pictureData = bytearray(texture.m_StreamData.size)
+                            # bundle.Reader.Position = resourceFileOffset + texture.m_StreamData.offset
+                            # bundle.Reader.Read(pictureData, 0, len(pictureData))
+                            # pictureData = bundle.Reader.ReadBytes(texture.m_StreamData.size)
+                            
+                            info = self.at.AT.BundleHelper.GetDirInfo(file_inst.parentBundle.file, fixedStreamPath.split("/")[-1])
+                            reader.Position = info.Offset + texture.m_StreamData.offset
+                            pictureData = reader.ReadBytes(texture.m_StreamData.size)
+                            
+                            m_TextureFormat = self.at.Texture.TextureFormat(texture.m_TextureFormat)
+                            m_Width = texture.m_Width
+                            m_Height = texture.m_Height
+                            
+                            img = parse_image_data(pictureData, m_Width, m_Height, TF(texture.m_TextureFormat), None, BuildTarget.UnknownPlatform, flip=True)
+                            img.save(str(self.game_cache_data_dir / f"{name}.png"))
+                            # textureBgraRaw = texture.DecodeManaged(pictureData, m_TextureFormat, m_Width, m_Height, True)
+                        
+                        
+                        
+
+                    for data in components:
+                        # componentPointer = data["component"]
+                        # componentExtInfo = self.at.manager.GetExtAsset(file_inst, componentPointer)
+                        # componentType = AssetClassID(componentExtInfo.info.TypeId)
+
+                        field_name = data.FieldName
+                        print(f"{name} {field_name}")
+
+                        if field_name == "m_GlyphTable":
+                            field_name
+
+        #         for goInfo in FontBaseList:
+        #             goBase = self.at.manager.GetBaseField(file_inst, goInfo)
+        #             font_name = goBase["m_Name"].AsString
+        #             pbar.set_description(f"Replacing font {font_name}")
+
+        #             newBaseField = self.at.manager.CreateValueBaseField(
+        #                 file_inst, AssetClassID.Font.value
+        #             )
+        #             newBaseField["m_FontData"].AsByteArray = font_data
+
+        #             newBaseField["m_Name"].AsString = font_name
+        #             newInfo = self.at._AT.AssetFileInfo.Create(
+        #                 file_inst.file, goInfo.PathId, AssetClassID.Font.value
+        #             )
+        #             newInfo.SetNewData(newBaseField)
+
+        #             file_inst.file.Metadata.RemoveAssetInfo(goInfo)
+        #             file_inst.file.Metadata.AddAssetInfo(newInfo)
+
+        #             if afileInstCache.get(file_inst.path) is None:
+        #                 afileInstCache[file_inst.path] = file_inst
+
+        # for afileInst in afileInstCache.values():
+        #     self.at.save_assets(afileInst)

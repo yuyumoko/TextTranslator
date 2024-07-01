@@ -66,10 +66,12 @@ class HTTPSession:
 
 class HTTPSessionApi:
     host: str
+    proxy: str = ""
     _session: aiohttp.ClientSession
 
-    def __init__(self, host):
+    def __init__(self, host, proxy=None):
         self.host = host
+        self.proxy = proxy
         self._session = HTTPSession()
         
     async def close_session(self):
@@ -82,18 +84,21 @@ class HTTPSessionApi:
         method: HTTPMethod,
         path: str,
         *,
+        host=None,
         json=None,
         headers=None,
         raise_error=True,
         session: aiohttp.ClientSession = None,
     ) -> T:
-        request_url = self.host + path
+        host = host or self.host
+        request_url = host + path
         try:
             async with session.request(
                 method.value,
                 request_url,
                 headers=headers,
                 json=json,
+                proxy=self.proxy,
             ) as resp:
                 if resp.status == 200:
                     return await resp.json()

@@ -47,6 +47,7 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
     # negative_prompt = "<|im_start|>system\n你是一个轻小说翻译模型，可以流畅通顺地以日本轻小说的风格将日文翻译成简体中文，并联系上下文正确使用人称代词，注意不要擅自添加原文中没有的代词，也不要擅自增加或减少换行。<|im_end|>\n"
     def __init__(self):
         # super().__init__(host, model_config)
+        self.cache_path = None
         super().__init__()
 
     def make_content(
@@ -121,21 +122,32 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
     def get_config_tag(self, glossary_path: Path = None):
         glossary: dict[str, str] = None
         glossary_list = []
-        if glossary_path is None:
-            glossary_path = self.cache_path / "glossary.txt"
+        if glossary_path is not None:
+            glossary_path = glossary_path if isinstance(glossary_path, Path) else Path(glossary_path)
+            if glossary_path is None:
+                glossary_path = self.cache_path / "glossary.txt"
 
-        if glossary_path.exists():
-            glossary_list = glossary_path.read_text(encoding="utf-8").splitlines()
-            if len(glossary_list) % 2 != 0:
-                raise ValueError("glossary file format error")
+            if glossary_path.exists():
+                try:
+                    with glossary_path.open("r", encoding="utf-8") as f:
+                        return json.load(f)
+                except:
+                    pass
+                
+                
+                glossary_list = glossary_path.read_text(encoding="utf-8").splitlines()
+                if len(glossary_list) % 2 != 0:
+                    raise ValueError("glossary file format error")
 
-        is_strictest = (self.cache_path / "strictest.txt").exists()
+        is_strictest = False
+        if self.cache_path is not None:
+            is_strictest = (self.cache_path / "strictest.txt").exists()
 
-        if len(glossary_list) > 0:
-            glossary = {
-                glossary_list[i]: glossary_list[i + 1]
-                for i in range(0, len(glossary_list), 2)
-            }
+            if len(glossary_list) > 0:
+                glossary = {
+                    glossary_list[i]: glossary_list[i + 1]
+                    for i in range(0, len(glossary_list), 2)
+                }
 
         return glossary, is_strictest
 
@@ -146,8 +158,15 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
         tran_cache_file: Path = None,
         is_strictest: bool = False,
         glossary_path: Path = None,
+        glossary: dict[str, str] = None,
+        no_save_file: bool = False,
     ) -> str:
-        glossary, _is_strictest = self.get_config_tag(glossary_path)
+        _glossary, _is_strictest = self.get_config_tag(glossary_path)
+        if glossary is None and _glossary is not None:
+            glossary = _glossary
+        elif _glossary is not None:
+            glossary.update(_glossary)
+            
         is_strictest = is_strictest or _is_strictest
 
         result_text_list = []
@@ -164,7 +183,13 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
                 result_text_list.append(line_line)
                 if has_japanese(line_line):
                     if not is_strictest:
-                        self.queue.put((self.make_content, line_line, None, False))
+                        gpt_prompt_list = []
+                        if glossary is not None:
+                            for key, value in glossary.items():
+                                if key in line_line:
+                                    gpt_prompt_list.append({"src": key, "dst": value})
+                        
+                        self.queue.put((self.make_content, line_line, gpt_prompt_list, False))
                     else:
                         for split_text in get_japanese_text(line_line):
                             gpt_prompt_list = []
@@ -196,11 +221,12 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
                 pbar.update()
                 if line.startswith("_<!endofline>"):
                     current_line_hash = line[13:]
-                    self.update_prepare_text(
-                        text_list_hash_data[current_line_hash],
-                        "\n".join(current_line),
-                        target_out_file,
-                    )
+                    if not no_save_file:
+                        self.update_prepare_text(
+                            text_list_hash_data[current_line_hash],
+                            "\n".join(current_line),
+                            target_out_file,
+                        )
                     tran_cache[text_list_hash_data[current_line_hash]] = "\n".join(current_line)
                     current_line = []
                     continue
@@ -221,6 +247,8 @@ class JPTranslator(QueueTextGenerationAPI, LocalJsonHandle):
         if tran_cache_file is not None:
             with tran_cache_file.open("w", encoding="utf-8") as f:
                 f.write(json.dumps(tran_cache, ensure_ascii=False, indent=4))
+                
+        return tran_cache
 
     async def translate2(
         self,

@@ -103,10 +103,13 @@ def pythonnet_init(is_MonoCecil=False):
         clr.AddReference("AssetsTools.NET.Cpp2IL")
         import AssetsTools.NET.Cpp2IL as Cpp2IL
 
+    clr.AddReference("AssetsTools.NET.Texture")
+    
     import AssetsTools.NET as _AT
     import AssetsTools.NET.Extra as AT
+    import AssetsTools.NET.Texture as Texture
 
-    return _AT, AT, Cpp2IL
+    return _AT, AT, Cpp2IL, Texture
 
 
 FieldsInfo = namedtuple(
@@ -134,6 +137,7 @@ class AssetsTools:
     _AT: object
     AT: object
     Cpp2IL: object
+    Texture: object
 
     is_load_Assemblies: bool
     manager: object
@@ -147,7 +151,7 @@ class AssetsTools:
 
         Managed_DIR = self.game_data_dir / "Managed"
         is_MonoCecil = Managed_DIR.exists()
-        self._AT, self.AT, self.Cpp2IL = pythonnet_init(is_MonoCecil)
+        self._AT, self.AT, self.Cpp2IL, self.Texture = pythonnet_init(is_MonoCecil)
 
         self.manager = self.AT.AssetsManager()
         self.manager.LoadClassPackage(CLASSDATATPK_DIR)
@@ -203,15 +207,23 @@ class AssetsTools:
             self.add_assets_cache(afileInst, cab_name, bundle_path, file_name_fix)
         return bunInst
 
-    def load_resources(self):
+    def load_resources(self, stream=None, file_inst=None):
         if self.resource_is_loaded:
             return True
 
+        ggm = None
+        
         ggm_path = self.game_data_dir / "globalgamemanagers"
-        if not ggm_path.exists():
+        
+        if ggm_path.exists():
+            ggm = self.manager.LoadAssetsFile(Path_str(ggm_path), True)
+        elif stream is not None:
+            ggm = self.manager.LoadAssetsFile(stream, True)
+        elif file_inst is not None:
+            ggm = file_inst
+        else:
             return False
-
-        ggm = self.manager.LoadAssetsFile(Path_str(ggm_path), True)
+            
         ggm.file.GenerateQuickLookup()
         self.manager.LoadClassDatabaseFromPackage(ggm.file.Metadata.UnityVersion)
 
@@ -399,6 +411,7 @@ class AssetsTools:
 
         for assets in self.assets.values():
             if assets.asset_name == "globalgamemanagers.assets":
+                self.load_resources(file_inst=assets.file_inst)
                 continue
             
             MonoBehaviour = self.filter_type(

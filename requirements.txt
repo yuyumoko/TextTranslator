@@ -9,3 +9,6 @@ pythonnet
 aiohttp
 UnityPy
 fonttools
+unityparser
+uvicorn
+fastapi

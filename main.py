@@ -94,25 +94,27 @@ def run_write_unity_file(game_path: Path):
 def run_replace_font(game_path: Path):
     import dumb_menu
     from core.UnityExtractor.ReplaceFont import replace_unity_font
-    
-    fonts = [f for f in Path("./font").iterdir() if f.is_file() and f.suffix in [".ttf", ".otf"]]
-    options = [f"{i+1}. {f.name}" for i, f in enumerate(fonts)]
-    index = dumb_menu.get_menu_choice(options, True)
-    
-    replace_unity_font(game_path, fonts[index])
-    
+
+    # fonts = [f for f in Path("./font").iterdir() if f.is_file() and f.suffix in [".ttf", ".otf"]]
+    # options = [f"{i+1}. {f.name}" for i, f in enumerate(fonts)]
+    # index = dumb_menu.get_menu_choice(options, True)
+    # font_path = fonts[index]
+
+    # replace_unity_font(game_path, fonts[index])
+
     # ./font/unifont-all.ttf
     # replace_unity_font(game_path, Path("./font/unifont-all.ttf"))
 
-    # from core.UnityExtractor.TextFinder import TextFinder
+    from core.UnityExtractor.TextFinder import TextFinder
 
     # custom_font_path = Path("./font/NotoSansSC-Regular.otf")
     # if not custom_font_path.exists():
     #     logger.error("字体文件不存在")
     #     return
 
-    # utf = TextFinder(game_path)
-    # utf.replace_font(custom_font_path)
+    utf = TextFinder(game_path)
+    utf.replace_font(
+    )
 
 
 async def run_translate_json_async(json_path: Path):
@@ -154,15 +156,48 @@ def run_translate_json(json_path: Path):
     asyncio.run(run_translate_json_async(json_path))
 
 
+@ag.apply("请拖入游戏目录")
+def test(game_path: Path):
+    import dumb_menu
+    from core.UnityExtractor.AssetsTools.SDF_Font.make_sdf_font import make_sdf_font
+
+    assets = [
+        f for f in Path("./font").iterdir() if f.is_file() and f.suffix in [".asset"]
+    ]
+    # options = [f"{i+1}. {f.name}" for i, f in enumerate(assets)]
+    # index = dumb_menu.get_menu_choice(options, True)
+    index = 1
+    asset_path = assets[index]
+
+    make_sdf_font(asset_path)
+
+
+async def run_api_server():
+    from server import run_server
+    from threading import Thread
+
+    t = Thread(
+        target=run_server, daemon=True
+    )
+    t.start()
+    t.join()
+
+
+def run_api_server_async():
+    asyncio.run(run_api_server())
+
+
 def run():
     MenuTools(
         title=f"--- 简简单单翻译一下  v{__version__} ---",
         options={
+            # test: "测试",
             unity_game: "1. 提取游戏文本资源 (先选这个, 生成需要翻译的文本)",
             run_translate: "2. 使用AI翻提取前的文本",
             run_write_unity_file: "3. 替换游戏内文本 (翻译完成后, 选这个)",
             run_replace_font: "4. 替换游戏内字体 (出现口口或者识别不出中文的情况, 选这个)",
             run_translate_json: "额外功能: 翻译其他工具导出的Json文件",
+            run_api_server_async: "启动API服务器",
         },
         args={
             run_translate: {"game_path": last_game_path},
